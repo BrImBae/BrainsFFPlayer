@@ -32,7 +32,7 @@ namespace BrainsFFPlayer.FFmpeg.Core
             oCodecContext->width = videoInfo.FrameSize.Width;
             oCodecContext->gop_size = videoInfo.GopSize;
             oCodecContext->max_b_frames = videoInfo.MaxBFrames;
-            oCodecContext->bit_rate = videoInfo.BitRate;
+            oCodecContext->bit_rate = videoInfo.Bitrate;
             oCodecContext->sample_aspect_ratio = videoInfo.SampleAspectRatio;
             oCodecContext->pix_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P;      //for h.264
             oCodecContext->time_base = videoInfo.Timebase;

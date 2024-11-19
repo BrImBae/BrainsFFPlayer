@@ -2,14 +2,8 @@
 using BrainsFFPlayer.FFmpeg.Core;
 using BrainsFFPlayer.FFmpeg.GenericOptions;
 using FFmpeg.AutoGen;
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Controls;
 
 namespace BrainsFFPlayer.FFmpeg
 {
@@ -33,6 +27,7 @@ namespace BrainsFFPlayer.FFmpeg
         private bool isRecordComplete;
         private bool isDecodingThreadRunning;
 
+        public event Action<VideoInfo> VideoInfoReceived = delegate { };
         public event Action<AVFrame, MisbMetadata> VideoFrameReceived = delegate { };
 
         public FFmpegManager()
@@ -157,8 +152,6 @@ namespace BrainsFFPlayer.FFmpeg
 
                 using var decoder = new VideoStreamDecoder(url, avInputOption, hwDeviceType);
 
-                videoInfo = decoder.GetVideoInfo();
-
                 var info = decoder.GetContextInfo();
                 info.ToList().ForEach(x => Debug.WriteLine($"{x.Key} = {x.Value}"));
 
@@ -171,6 +164,7 @@ namespace BrainsFFPlayer.FFmpeg
 
                 while (decoder.TryDecodeNextFrame(out var vmti, out var avFrame) && isDecodingEvent!.WaitOne())
                 {
+                    videoInfo = decoder.GetVideoInfo();
                     var convertedFrame = vfc.Convert(avFrame);
 
                     if (isRecord)
@@ -178,6 +172,7 @@ namespace BrainsFFPlayer.FFmpeg
                         decodedFrameQueue.Enqueue(convertedFrame);
                     }
 
+                    VideoInfoReceived?.Invoke(videoInfo);
                     VideoFrameReceived?.Invoke(convertedFrame, vmti);
                 }
             }

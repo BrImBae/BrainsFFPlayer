@@ -12,7 +12,7 @@
                 <materialDesign:BundledTheme
                     BaseTheme="Light"
                     ColorAdjustment="{materialDesign:ColorAdjustment}"
-                    PrimaryColor="Indigo"
+                    PrimaryColor="DeepPurple"
                     SecondaryColor="LightBlue" />
 
                 <!-- Material Design -->

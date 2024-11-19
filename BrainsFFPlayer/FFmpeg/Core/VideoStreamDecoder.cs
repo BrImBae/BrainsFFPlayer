@@ -2,13 +2,7 @@
 using BrainsFFPlayer.FFmpeg.GenericOptions;
 using BrainsFFPlayer.Utility;
 using FFmpeg.AutoGen;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Drawing;
-using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace BrainsFFPlayer.FFmpeg.Core
@@ -83,6 +77,9 @@ namespace BrainsFFPlayer.FFmpeg.Core
 
                 pCodecContext = ffmpeg.avcodec_alloc_context3(codec);
 
+                ffmpeg.av_opt_set(pCodecContext->priv_data, "preset", "fast", 0);
+                ffmpeg.av_opt_set(pCodecContext->priv_data, "tune", "zerolatency", 0);
+
                 if (HWDeviceType != AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
                 {
                     ffmpeg.av_hwdevice_ctx_create(&pCodecContext->hw_device_ctx, HWDeviceType, null, null, 0).ThrowExceptionIfError();
@@ -131,7 +128,10 @@ namespace BrainsFFPlayer.FFmpeg.Core
 
                         if (dataIndex >= 0 && pFormatContext->streams[dataIndex]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_DATA)
                         {
-                            vmti = MISB.ProcessPacketMetadata(pPacket->size, pPacket->data);
+                            if(MISB.IsMISBMetadata(pPacket->size, pPacket->data))
+                            {
+                                vmti = MISB.ProcessPacketMetadata(pPacket->size, pPacket->data);
+                            }                           
                         }
 
                     } while (pPacket->stream_index != videoIndex);
@@ -190,12 +190,27 @@ namespace BrainsFFPlayer.FFmpeg.Core
         {
             VideoInfo videoInfo = new()
             {
+                TotalDuration = pFormatContext->duration,
                 FrameSize = new Size(pCodecContext->width, pCodecContext->height),
+                FrameRate = pFormatContext->streams[videoIndex]->avg_frame_rate,
+                ProbeSize = pFormatContext->probesize,
+                AverageBitrate = pFormatContext->bit_rate,
+
+                Bitrate = pCodecContext->bit_rate,
                 GopSize = pCodecContext->gop_size,
-                BitRate = pCodecContext->bit_rate,
+                CodecID = pCodecContext->codec_id,
+                PixcelFormat = pCodecContext->pix_fmt,
+                Profile = pCodecContext->profile,
+                Level = pCodecContext->level,
+                QMin = pCodecContext->qmin,
+                QMax = pCodecContext->qmax,
                 MaxBFrames = pCodecContext->max_b_frames,
                 SampleAspectRatio = pCodecContext->sample_aspect_ratio,
-                FrameRate = pFormatContext->streams[videoIndex]->avg_frame_rate,
+
+                ThreadCount = pCodecContext->thread_count,
+                RcBufferSize = pCodecContext->rc_buffer_size,
+                RcMaxRate = pCodecContext->rc_max_rate,
+                Delay = pCodecContext->delay,
                 Timebase = pFormatContext->streams[videoIndex]->time_base
             };
 

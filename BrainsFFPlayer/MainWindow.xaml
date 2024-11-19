@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:local="clr-namespace:BrainsFFPlayer"
     mc:Ignorable="d"
     Title="FFPlayer"
@@ -13,46 +14,558 @@
     Width="1280"
     d:DataContext="{d:DesignInstance local:MainWindowViewModel, IsDesignTimeCreatable=True}">
     <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition
+                Height="1*" />
+            <RowDefinition
+                Height="120" />
+        </Grid.RowDefinitions>
+
         <Image
             x:Name="image"
-            Margin="10,65,10,10"
-            Source="{Binding VideoFrame}"/>
-        <Button
-            Content="재생"
-            HorizontalAlignment="Right"
-            Margin="0,10,81,0"
-            VerticalAlignment="Top"
-            Width="75"
-            Height="50" 
-            Command="{Binding PlayVideo_Command}"/>
+            Source="{Binding VideoFrame}" />
 
-        <ComboBox
-            HorizontalAlignment="Right"
-            Margin="0,27,663,0"
+        <!--하단 메뉴-->
+        <Grid
+            Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition />
+                <RowDefinition />
+            </Grid.RowDefinitions>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition
+                        Width="700" />
+                    <ColumnDefinition
+                        Width="1*" />
+                </Grid.ColumnDefinitions>
+                <TextBox
+                    x:Name="URL_TextBox"
+                    Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    materialDesign:HintAssist.Hint="URL"
+                    AcceptsReturn="True"
+                    Width="500"
+                    Margin="10,0,0,0"
+                    Text="{Binding VideoUrl}" />
+                <Button
+                    Style="{StaticResource MaterialDesignRaisedSecondaryDarkButton}"
+                    materialDesign:ButtonAssist.CornerRadius="10"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Margin="520,0,0,0"
+                    Width="160"
+                    Height="50"
+                    Command="{Binding OpenVideoFile_Command}">
+                    <StackPanel
+                        Orientation="Horizontal">
+                        <materialDesign:PackIcon
+                            Kind="FolderPlayOutline" />
+                        <TextBlock
+                            Margin="10,0,0,0"
+                            Text="파일 가져오기" />
+                    </StackPanel>
+                </Button>
+
+                <RichTextBox
+                    x:Name="DebugMessageRichTextBox"
+                    Grid.Column="1"
+                    MinWidth="300"
+                    AcceptsReturn="True"
+                    IsDocumentEnabled="True"
+                    IsReadOnly="True"
+                    VerticalScrollBarVisibility="Auto"
+                    Margin="5,5,80,5">
+                    <FlowDocument>
+                        <Paragraph>
+                            <Run
+                                FontWeight="Bold">
+                                Debug Message
+                            </Run>
+                            <LineBreak />
+                        </Paragraph>
+                    </FlowDocument>
+                </RichTextBox>
+                <Button
+                    Grid.Column="1"
+                    Style="{StaticResource MaterialDesignIconButton}"
+                    Margin="0,0,20,0"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Height="40"
+                    Width="40"
+                    Click="ExpandButton_Click">
+                    <materialDesign:PackIcon
+                        Kind="ChevronUp" />
+                </Button>
+            </Grid>
+            <Grid
+                Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition
+                        Width="360" />
+                    <ColumnDefinition
+                        Width="1*" />
+                    <ColumnDefinition
+                        Width="80" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel
+                    Orientation="Horizontal">
+                    <Button
+                        materialDesign:ButtonAssist.CornerRadius="10"
+                        HorizontalAlignment="Right"
+                        Margin="10,0"
+                        VerticalAlignment="Center"
+                        Width="100"
+                        Height="50"
+                        Command="{Binding PlayVideo_Command}">
+                        <StackPanel
+                            Orientation="Horizontal">
+                            <materialDesign:PackIcon
+                                Kind="Play" />
+                            <TextBlock
+                                Margin="10,0,0,0"
+                                Text="재생" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        x:Name="Stop_Button"
+                        materialDesign:ButtonAssist.CornerRadius="10"
+                        Margin="0,0,10,0"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Width="100"
+                        Height="50"
+                        Command="{Binding StopVideo_Command}">
+                        <StackPanel
+                            Orientation="Horizontal">
+                            <materialDesign:PackIcon
+                                Kind="Stop" />
+                            <TextBlock
+                                Margin="10,0,0,0"
+                                Text="중지" />
+                        </StackPanel>
+                    </Button>
+                    <TextBlock
+                        Margin="10,0,5,0"
+                        VerticalAlignment="Center"
+                        Text="{Binding PlayTime}" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Text="/" />
+                    <TextBlock
+                        Margin="5,0"
+                        VerticalAlignment="Center"
+                        Text="{Binding TotalPlayTime}" />
+                </StackPanel>
+                <Slider
+                    Grid.Column="1"
+                    Margin="20,0"
+                    IsHitTestVisible="False"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Stretch"
+                    Maximum="{Binding TotalDuration}"
+                    Value="{Binding Duration}" />
+                <ToggleButton
+                    x:Name="OptionToggleButton"
+                    Grid.Column="2"
+                    Content="{materialDesign:PackIcon Kind=Cog}"
+                    Style="{StaticResource MaterialDesignFlatPrimaryToggleButton}" />
+            </Grid>
+        </Grid>
+
+        <!--비디오 정보-->
+        <ToggleButton
+            x:Name="InfoToggleButton"
+            Style="{StaticResource MaterialDesignFlatPrimaryToggleButton}"
+            Margin="5,5,0,0"
+            HorizontalAlignment="Left"
             VerticalAlignment="Top"
-            Width="106"
-            Height="25"
-            SelectedIndex="{Binding SelectedInputFormatIndex}"
-            ItemsSource="{Binding InputFormatCollection}">
-        </ComboBox>
-        <TextBox
-            x:Name="URL_TextBox"
-            HorizontalAlignment="Right"
             Height="40"
-            Margin="0,20,161,0"
-            TextWrapping="Wrap"
-            VerticalAlignment="Top"
-            Width="320"
-            Text="{Binding VideoUrl}"
-            VerticalContentAlignment="Center" />
-        <Button
-            x:Name="Stop_Button"
-            Content="중지"
+            Width="40">
+            <materialDesign:PackIcon
+                Kind="Info" />
+        </ToggleButton>
+        <Border
+            Margin="5,50,0,5"
+            CornerRadius="10"
+            HorizontalAlignment="Left"
+            Width="300"
+            Background="LightGray"
+            Opacity="0.8"
+            Visibility="{Binding ElementName=InfoToggleButton, Path=IsChecked, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel
+                Margin="10">
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Duration">                        
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding TotalDuration}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Frame Size">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding FrameSize}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Frame Rate">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding FrameRate}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Probe Size">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding ProbeSize}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Average Bitrate">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding AverageBitrate}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Bitrate">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding Bitrate}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="GOP Size">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding GopSize}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Codec ID">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding CodecID}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Pixcel Format">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding PixcelFormat}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Profile">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding Profile}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Level">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding Level}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="QMin">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding QMin}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="QMax">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding QMax}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Max B Frames">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding MaxBFrames}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Sample Aspect Ratio">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding SampleAspectRatio}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Timebase">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding Timebase}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Thread Count">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding ThreadCount}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="RC Buffer Size">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding RcBufferSize}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="RC Max Rate">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding RcMaxRate}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+                <Grid
+                    Margin="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition
+                            Width="120" />
+                        <ColumnDefinition
+                            Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Delay">
+                    </TextBlock>
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding Delay}"
+                        FontWeight="Bold">
+                    </TextBlock>
+                </Grid>
+            </StackPanel>
+        </Border>
+        
+        <!--비디오 옵션-->
+        <Border
+            Grid.RowSpan="2"
+            CornerRadius="10"
             HorizontalAlignment="Right"
-            Margin="0,10,10,0"
-            VerticalAlignment="Top"
-            Width="66"
-            Height="50"
-            Command="{Binding StopVideo_Command}"/>
+            Width="400"
+            Margin="0,5,5,60"
+            Background="LightGray"
+            Opacity="0.8"
+            Visibility="Collapsed">
+            <Grid>
+                <ComboBox
+                    x:Name="InputFormatComboBox"
+                    materialDesign:HintAssist.Hint="AV Input format"
+                    Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                    SelectedIndex="{Binding SelectedInputFormatIndex}"
+                    HorizontalAlignment="Left"
+                    Width="140"
+                    Margin="35,26,0,0"
+                    VerticalAlignment="Top" />
+            </Grid>
+        </Border>
+
     </Grid>
+
+
 </Window>
