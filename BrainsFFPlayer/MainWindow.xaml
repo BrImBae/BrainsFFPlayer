@@ -72,6 +72,7 @@
                 <RichTextBox
                     x:Name="DebugMessageRichTextBox"
                     Grid.Column="1"
+                    IsEnabled="False"
                     MinWidth="300"
                     AcceptsReturn="True"
                     IsDocumentEnabled="True"
@@ -91,6 +92,7 @@
                 <Button
                     Grid.Column="1"
                     Style="{StaticResource MaterialDesignIconButton}"
+                    IsEnabled="False"
                     Margin="0,0,20,0"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Center"
@@ -105,7 +107,7 @@
                 Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition
-                        Width="360" />
+                        Width="500" />
                     <ColumnDefinition
                         Width="1*" />
                     <ColumnDefinition
@@ -121,6 +123,7 @@
                         VerticalAlignment="Center"
                         Width="100"
                         Height="50"
+                        IsEnabled="{Binding IsPlay, Converter={StaticResource InvertBooleanConverter}}"
                         Command="{Binding PlayVideo_Command}">
                         <StackPanel
                             Orientation="Horizontal">
@@ -139,6 +142,7 @@
                         VerticalAlignment="Center"
                         Width="100"
                         Height="50"
+                        IsEnabled="{Binding IsPlay}"
                         Command="{Binding StopVideo_Command}">
                         <StackPanel
                             Orientation="Horizontal">
@@ -147,6 +151,28 @@
                             <TextBlock
                                 Margin="10,0,0,0"
                                 Text="중지" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        IsEnabled="False"
+                        x:Name="Record_Button"
+                        materialDesign:ButtonAssist.CornerRadius="10"
+                        Style="{StaticResource MaterialDesignPaperDarkButton}"
+                        Margin="0,0,10,0"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Width="130"
+                        Height="50"
+                        Command="{Binding RecordVideo_Command}">
+                        <StackPanel
+                            Orientation="Horizontal">
+                            <materialDesign:PackIcon
+                                Kind="Record" 
+                                Foreground="OrangeRed"
+                                VerticalAlignment="Center"/>
+                            <TextBlock
+                                Margin="10,0,0,0"
+                                Text="{Binding RecordText}" />
                         </StackPanel>
                     </Button>
                     <TextBlock
@@ -551,8 +577,14 @@
             Margin="0,5,5,60"
             Background="LightGray"
             Opacity="0.8"
-            Visibility="Collapsed">
-            <Grid>
+            IsEnabled="{Binding IsPlay, Converter={StaticResource InvertBooleanConverter}}"
+            Visibility="{Binding ElementName=OptionToggleButton, Path=IsChecked, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel>
+                <TextBlock
+                    Margin="20,10"
+                    Text="Input Format"
+                    FontWeight="Bold"
+                    FontSize="20" />
                 <ComboBox
                     x:Name="InputFormatComboBox"
                     materialDesign:HintAssist.Hint="AV Input format"
@@ -560,9 +592,26 @@
                     SelectedIndex="{Binding SelectedInputFormatIndex}"
                     HorizontalAlignment="Left"
                     Width="140"
-                    Margin="35,26,0,0"
+                    Margin="20,5"
                     VerticalAlignment="Top" />
-            </Grid>
+                <CheckBox
+                    Margin="20,10"
+                    materialDesign:CheckBoxAssist.CheckBoxSize="30"
+                    Content="HW 디코더 (DXVA2)"
+                    IsChecked="{Binding IsHwDecoderDXVA2}" />
+                
+                <TextBlock
+                    Margin="20,20,20,10"
+                    Text="AVFormat Options"
+                    FontWeight="Bold"
+                    FontSize="20">
+                    
+                </TextBlock>
+                <StackPanel
+                    x:Name="FormatOptionStackPanel"
+                    Margin="20,5">
+                </StackPanel>
+            </StackPanel>
         </Border>
 
     </Grid>

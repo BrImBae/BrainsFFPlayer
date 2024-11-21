@@ -15,7 +15,8 @@ namespace BrainsFFPlayer.FFmpeg
         private AVHWDeviceType hwDeviceType;
 
         private AVFrame queueFrame;
-        private AVFormatOption avInputOption;
+        private AVInputOption avInputOption;
+        private List<Tuple<string, string>> avFormatOption = [];
 
         private H264VideoStreamEncoder? h264Encoder;
         private ManualResetEvent? isEncodingEvent;
@@ -39,18 +40,19 @@ namespace BrainsFFPlayer.FFmpeg
             catch (NotSupportedException ex) { Debug.WriteLine(ex.Message); }
         }
 
-        public void InitializeFFmpeg(string _url, AVFormatOption _avInputOption)
+        public void InitializeFFmpeg(string _url, AVInputOption _avInputOption)
         {
             url = _url;
             avInputOption = _avInputOption;
         }
 
-        public void PlayVideo(string _url, AVFormatOption _avInputOption)
+        public void PlayVideo(string _url, AVInputOption _avInputOption, List<Tuple<string, string>> _avFormatOption, bool isHwDecoderDXVA2 = false)
         {
             url = _url;
             avInputOption = _avInputOption;
+            avFormatOption = _avFormatOption;
 
-            ThreadPool.QueueUserWorkItem(new WaitCallback(DecodeAllFramesToImages));
+            ThreadPool.QueueUserWorkItem(new WaitCallback(DecodeAllFramesToImages), isHwDecoderDXVA2);
             isDecodingEvent = new(false);
             isDecodingEvent.Set();
 
@@ -148,9 +150,10 @@ namespace BrainsFFPlayer.FFmpeg
         {
             try
             {
-                ConfigureHWDecoder(true, out hwDeviceType);
+                bool hwDecoder = Convert.ToBoolean(state);
+                ConfigureHWDecoder(hwDecoder, out hwDeviceType);
 
-                using var decoder = new VideoStreamDecoder(url, avInputOption, hwDeviceType);
+                using var decoder = new VideoStreamDecoder(url, avInputOption, avFormatOption,hwDeviceType);
 
                 var info = decoder.GetContextInfo();
                 info.ToList().ForEach(x => Debug.WriteLine($"{x.Key} = {x.Value}"));

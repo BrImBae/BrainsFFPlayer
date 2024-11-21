@@ -22,7 +22,7 @@ namespace BrainsFFPlayer.FFmpeg.Core
         public Size FrameSize { get; }
         public AVPixelFormat PixelFormat { get; }
 
-        public VideoStreamDecoder(string url, AVFormatOption avInputOption, AVHWDeviceType HWDeviceType = AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
+        public VideoStreamDecoder(string url, AVInputOption avInputOption, List<Tuple<string, string>> avFormatOption, AVHWDeviceType HWDeviceType = AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
         {
             try
             {
@@ -39,29 +39,28 @@ namespace BrainsFFPlayer.FFmpeg.Core
 
                 if (inputFormat != null)
                 {
-                    iformat = ffmpeg.av_find_input_format(inputFormat.Name);
+                    iformat = ffmpeg.av_find_input_format(inputFormat.Key);
                 }
 
                 AVDictionary* options;
 
-                ffmpeg.av_dict_set(&options, "max_delay", "0", 0);
-                ffmpeg.av_dict_set(&options, "rtbufsize", "0", 0);
-                ffmpeg.av_dict_set(&options, "thread_queue_size", "0", 0); //set the maximum number of queued packets from the demuxer
+                foreach(var option in avFormatOption)
+                {
+                    ffmpeg.av_dict_set(&options, option.Item1, option.Item2, 0);
+                }
 
                 switch (avInputOption)
                 {
-                    case AVFormatOption.AUTO:
+                    case AVInputOption.AUTO:
                         ffmpeg.avformat_open_input(&pFormat, url, null, &options).ThrowExceptionIfError();
                         break;
-                    case AVFormatOption.MP4:
-                    case AVFormatOption.MPEG_TS:
-                    case AVFormatOption.DSHOW:
-                        ffmpeg.avformat_open_input(&pFormat, url, iformat, &options).ThrowExceptionIfError();
-                        break;
-                    case AVFormatOption.RTP:
-                    case AVFormatOption.RTSP:                       
-                        ffmpeg.av_dict_set(&options, "fflags", "nobuffer", 0);          //udp, rtp, rtsp에만 설정 가능
-                        ffmpeg.av_dict_set(&options, "reorder_queue_size", "1", 0);     // udp, rtp, rtsp에만 설정 가능
+                    case AVInputOption.MP4:
+                    case AVInputOption.MPEG_TS:
+                    case AVInputOption.DSHOW:
+                        //TODO
+                    case AVInputOption.RTP:
+                    case AVInputOption.RTSP:
+                        //TODO
                         ffmpeg.avformat_open_input(&pFormat, url, iformat, &options).ThrowExceptionIfError();
                         break;
                 }

@@ -10,8 +10,10 @@ using System.Windows.Media.Imaging;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Diagnostics;
-using PixelFormat = System.Drawing.Imaging.PixelFormat;
 using Microsoft.Win32;
+using System.Collections.ObjectModel;
+using BrainsFFPlayer.Utility;
+using PixelFormat = System.Drawing.Imaging.PixelFormat;
 
 namespace BrainsFFPlayer
 {
@@ -25,15 +27,20 @@ namespace BrainsFFPlayer
 
         private const long usScale = 1000000;
 
+        private bool isRecord;
+
         #region Binding Fields
 
+        private bool isPlay;
+        private string recordText = "녹화";
         private string videoUrl = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
         private BitmapImage? videoFrame;
         private int selectedInputFormatIndex;
         private string totalPlayTime = "00:00:00";
         private string playTime = "00:00:00";
 
-
+        public bool IsPlay { get { return isPlay; } set { SetProperty(ref isPlay, value); } }
+        public string RecordText { get { return recordText; } set { SetProperty(ref recordText, value); } }
         public string VideoUrl { get { return videoUrl; } set { SetProperty(ref videoUrl, value); } }
         public BitmapImage? VideoFrame { get { return videoFrame; } set { SetProperty(ref videoFrame, value); } }
         public int SelectedInputFormatIndex { get { return selectedInputFormatIndex; } set { SetProperty(ref selectedInputFormatIndex, value); } }
@@ -44,21 +51,21 @@ namespace BrainsFFPlayer
 
         private long totalDuration;
         private long duration;
-        private string frameSize = string.Empty;
-        private string frameRate = string.Empty;
+        private string frameSize = "-";
+        private string frameRate = "-";
         private long probeSize;
         private long averageBitrate;
         private long bitrate;
         private int gopSize;
-        private string codecID = string.Empty;
-        private string pixcelFormat = string.Empty;
+        private string codecID = "-";
+        private string pixcelFormat = "-";
         private int profile;
         private int level;
         private int qMin;
         private int qMax;
         private int maxBFrames;
-        private string sampleAspectRatio = string.Empty;
-        private string timebase = string.Empty;
+        private string sampleAspectRatio = "-";
+        private string timebase = "-";
         private int threadCount;
         private int rcBufferSize;
         private long rcMaxRate;
@@ -88,12 +95,21 @@ namespace BrainsFFPlayer
 
         #endregion
 
+        #region Video Option
+
+        private bool isHwDecoderDXVA2;
+
+        public bool IsHwDecoderDXVA2 { get { return isHwDecoderDXVA2; } set { SetProperty(ref isHwDecoderDXVA2, value); } }
+        public ObservableCollection<AVFormatOptionItem> FormatOptionItems { get; set; } = [];
+
+        #endregion
 
         #endregion
 
         public MainWindowViewModel()
         {
             InitializeCommand();
+            InitializeAVFormatOptionCollection();
         }
 
         private void InitializeCommand()
@@ -102,6 +118,19 @@ namespace BrainsFFPlayer
             PlayVideo_Command = new RelayCommand(PlayVideo);
             StopVideo_Command = new RelayCommand(StopVideo);
             RecordVideo_Command = new RelayCommand(RecordVideo);
+        }
+
+        private void InitializeAVFormatOptionCollection()
+        {
+            foreach (AVFormatOption options in Enum.GetValues(typeof(AVFormatOption)))
+            {
+                var option = EnumHelper.GetAVFormatOption(options);
+
+                if (option != null)
+                {
+                    FormatOptionItems.Add(new AVFormatOptionItem { Key = option.Key, Value = option.Value, Desciption = option.Description });
+                }
+            }
         }
 
         #region Commands
@@ -126,9 +155,12 @@ namespace BrainsFFPlayer
 
         private void PlayVideo()
         {
-            ffmpegManager.PlayVideo(VideoUrl, (AVFormatOption)SelectedInputFormatIndex);
+            ffmpegManager.PlayVideo(VideoUrl, (AVInputOption)SelectedInputFormatIndex, GetFormatOption(), IsHwDecoderDXVA2);
+         
             ffmpegManager.VideoInfoReceived += VideoInfoReceived;
             ffmpegManager.VideoFrameReceived += VideoFrameReceived;
+
+            IsPlay = true;
         }
 
         private void StopVideo()
@@ -137,22 +169,48 @@ namespace BrainsFFPlayer
 
             ffmpegManager.VideoInfoReceived -= VideoInfoReceived;
             ffmpegManager.VideoFrameReceived -= VideoFrameReceived;
+
             ffmpegManager.DisposeFFmpeg();
+
+            IsPlay = false;
         }
 
         private void RecordVideo()
         {
+            isRecord = !isRecord;
 
+            if(isRecord)
+            {
+                RecordText = "녹화 중지";
+            }
+            else
+            {
+                RecordText = "녹화";
+            }
         }
 
         #endregion
 
+        private List<Tuple<string, string>> GetFormatOption()
+        {
+            List<Tuple<string, string>> formatTuple = [];
+
+            foreach (var item in FormatOptionItems)
+            {
+                if (item.IsChecked)
+                {
+                    formatTuple.Add(Tuple.Create(item.Key, item.Value));
+                }
+            }
+
+            return formatTuple;
+        }
 
         private void VideoInfoReceived(VideoInfo info)
         {
             TotalDuration = info.TotalDuration / usScale;
             FrameSize = string.Format("{0}x{1}", info.FrameSize.Width, info.FrameSize.Height);
-            FrameRate = string.Format("{0}", info.FrameRate.num / info.FrameRate.den);
+            FrameRate = info.FrameRate.den > 0 ? string.Format("{0}", info.FrameRate.num / info.FrameRate.den) : "알 수 없음";
             ProbeSize = info.ProbeSize;
             AverageBitrate = info.AverageBitrate;
             Bitrate = info.Bitrate;
@@ -164,8 +222,8 @@ namespace BrainsFFPlayer
             QMin = info.QMin;
             QMax = info.QMax;
             MaxBFrames = info.MaxBFrames;
-            SampleAspectRatio = string.Format("{0}", info.SampleAspectRatio.num / info.SampleAspectRatio.den);
-            Timebase = string.Format("{0}", info.Timebase.num / info.Timebase.den);
+            SampleAspectRatio = info.SampleAspectRatio.den > 0 ? string.Format("{0}", info.SampleAspectRatio.num / info.SampleAspectRatio.den) : "알 수 없음";
+            Timebase = info.Timebase.den > 0 ? string.Format("{0}", info.Timebase.num / info.Timebase.den) : "알 수 없음";
             ThreadCount = info.ThreadCount;
             RcBufferSize = info.RcBufferSize;
             RcMaxRate = info.RcMaxRate;
