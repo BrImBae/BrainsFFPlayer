@@ -2,6 +2,7 @@
 using BrainsFFPlayer.FFmpeg.GenericOptions;
 using BrainsFFPlayer.Utility;
 using FFmpeg.AutoGen;
+using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 
@@ -102,68 +103,88 @@ namespace BrainsFFPlayer.FFmpeg.Core
         public bool TryDecodeNextFrame(out MisbMetadata vmti, out AVFrame frame)
         {            
             vmti = new();
+            frame = *pFrame;
 
             ffmpeg.av_frame_unref(pFrame);
             ffmpeg.av_frame_unref(receivedFrame);
-            int error;
 
+            int error;
             AVRational time_base = pFormatContext->streams[videoIndex]->time_base;
 
-            do
+            while (true)
             {
                 try
                 {
-                    do
+                    // 새로운 패킷을 가져오기 위해 기존 패킷 해제
+                    ffmpeg.av_packet_unref(pPacket);
+
+                    //디버깅으로 장시간 디코딩 멈출 경우 -5 에러 발생 (I/O error)
+                    error = ffmpeg.av_read_frame(pFormatContext, pPacket);
+
+                    if (error == ffmpeg.AVERROR_EOF || error == -5)
                     {
-                        ffmpeg.av_packet_unref(pPacket);
+                        return false;
+                    }
 
-                        error = ffmpeg.av_read_frame(pFormatContext, pPacket).ThrowExceptionIfError();
-
-                        if (error == ffmpeg.AVERROR_EOF)
+                    if (dataIndex >= 0 && pFormatContext->streams[dataIndex]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_DATA)
+                    {
+                        if (MISB.IsMISBMetadata(pPacket->size, pPacket->data))
                         {
-                            frame = *pFrame;
-                            return false;
+                            vmti = MISB.ProcessPacketMetadata(pPacket->size, pPacket->data);
                         }
+                    }
 
-                        if (dataIndex >= 0 && pFormatContext->streams[dataIndex]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_DATA)
-                        {
-                            if(MISB.IsMISBMetadata(pPacket->size, pPacket->data))
-                            {
-                                vmti = MISB.ProcessPacketMetadata(pPacket->size, pPacket->data);
-                            }                           
-                        }
+                    // 비디오 스트림 패킷인지 확인
+                    if (pPacket->stream_index != videoIndex)
+                        continue;
 
-                    } while (pPacket->stream_index != videoIndex);
+                    // 패킷을 디코더에 전달
+                    error = ffmpeg.avcodec_send_packet(pCodecContext, pPacket);
 
-                    /* Send the video frame stored in the temporary packet to the decoder.
-                     * The input video stream decoder is used to do this. */
-                    ffmpeg.avcodec_send_packet(pCodecContext, pPacket).ThrowExceptionIfError();
+                    if (error == ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                    {
+                        // 디코더가 꽉 차 있음 → 이전 프레임을 받아야 함
+                        continue;
+                    }
+                    else if (error < 0)
+                    {
+                        return false;
+                    }
                 }
                 finally
                 {
                     ffmpeg.av_packet_unref(pPacket);
                 }
 
-                //read decoded frame from input codec context
-                error = ffmpeg.avcodec_receive_frame(pCodecContext, pFrame).ThrowExceptionIfError();
+                // 패킷이 정상적으로 전달된 경우, 디코딩된 프레임을 가져옴
+                while (true)
+                {
+                    error = ffmpeg.avcodec_receive_frame(pCodecContext, pFrame);
 
-            } while (error == ffmpeg.AVERROR(ffmpeg.EAGAIN));
+                    if (error == ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                    {
+                        // 새로운 패킷을 보내야 함
+                        break;
+                    }
+                    else if (error < 0 || error == ffmpeg.AVERROR_EOF)
+                    {
+                        return false;
+                    }
 
-            if (pCodecContext->hw_device_ctx != null)
-            {
-                ffmpeg.av_hwframe_transfer_data(receivedFrame, pFrame, 0).ThrowExceptionIfError();
-                frame = *receivedFrame;
+                    // 하드웨어 디코딩이 활성화된 경우 데이터 변환
+                    if (pCodecContext->hw_device_ctx != null)
+                    {
+                        ffmpeg.av_hwframe_transfer_data(receivedFrame, pFrame, 0);
+                        frame = *receivedFrame;
+                    }
+
+                    frame.time_base = time_base;
+                    frame.duration = pFrame->duration;
+                    frame.pts = pFrame->pts;
+
+                    return true;
+                }
             }
-            else
-            {
-                frame = *pFrame;
-            }
-
-            frame.time_base = time_base;
-            frame.duration = pFrame->duration;
-            frame.pts = pFrame->pts;
-
-            return true;
         }
 
         public IReadOnlyDictionary<string, string> GetContextInfo()

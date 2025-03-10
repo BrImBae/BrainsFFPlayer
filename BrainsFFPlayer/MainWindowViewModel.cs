@@ -17,6 +17,14 @@ using PixelFormat = System.Drawing.Imaging.PixelFormat;
 
 namespace BrainsFFPlayer
 {
+    internal class BoundingBox
+    {
+        public Point TopLeft;
+        public Point BottomRight;
+        public int Width;
+        public int Height;
+    }
+
     internal class MainWindowViewModel : ObservableObject
     {
         private readonly FFmpegManager ffmpegManager = new();
@@ -173,6 +181,10 @@ namespace BrainsFFPlayer
             ffmpegManager.DisposeFFmpeg();
 
             IsPlay = false;
+            TotalDuration = 0;
+            Duration = 0;
+            TotalPlayTime = "00:00:00";
+            PlayTime = "00:00:00";
         }
 
         private void RecordVideo()
@@ -241,11 +253,96 @@ namespace BrainsFFPlayer
                 startTime = stopwatch.ElapsedMilliseconds;
             }
 
-            Bitmap newFrame = new(frame.width, frame.height, frame.linesize[0], PixelFormat.Format24bppRgb, (IntPtr)frame.data[0]);
-            BitmapToImageSource(newFrame);
+            var convertedFrame = UpdateVideoFrameWithVMTI(frame, metadata);
+
+            BitmapToImageSource(convertedFrame);
             SyncAVFrameTimeBase(frame);
         }
 
+        private unsafe Bitmap UpdateVideoFrameWithVMTI(AVFrame frame, MisbMetadata misb)
+        {
+            Bitmap newFrame = new(frame.width, frame.height, frame.linesize[0], PixelFormat.Format24bppRgb, (IntPtr)frame.data[0]);
+
+            if (misb.UL == UniversalLabel.UASDatalinkLocalSet)
+            {
+                var vmtiLS = misb.ST0601LS.VMTILocalSet;
+                var frameWidth = vmtiLS.FrameWidth;
+
+                foreach (var target in vmtiLS.VTargetSeries)
+                {
+                    using Graphics g = Graphics.FromImage(newFrame);
+
+                    var targetID = target.Key;
+                    var confidence = target.Value.VObjectSeries[0].Confidence;
+
+                    var topLeft = target.Value.BoundingBoxTopLeft;
+                    var bottomRight = target.Value.BoundingBoxBottomRight;
+
+                    var boundBox = GetBoundingBox(topLeft, bottomRight, frameWidth);
+
+                    DrawBoundingBox(g, boundBox);
+                    DrawOntology(g, boundBox, vmtiLS.OntologySeries, target.Value.VObjectSeries, targetID);
+                }
+            }
+
+            return newFrame;
+        }
+
+        #region Draw MISB
+
+        private BoundingBox GetBoundingBox(ulong topLeft, ulong bottomRight, uint frameWidth)
+        {
+            var box = new BoundingBox();
+
+            var (X0, Y0) = MisbValueConverter.GetCoordinate(topLeft, frameWidth);
+            var (X1, Y1) = MisbValueConverter.GetCoordinate(bottomRight, frameWidth);
+
+            box.TopLeft = new System.Drawing.Point((int)X0, (int)Y0);
+            box.BottomRight = new System.Drawing.Point((int)X1, (int)Y1);
+            box.Width = (int)Math.Abs(X0 - X1);
+            box.Height = (int)Math.Abs(Y0 - Y1);
+
+            return box;
+        }
+
+        private void DrawBoundingBox(Graphics g, BoundingBox box)
+        {
+            // Define the bounding box
+            Rectangle boundingBox = new(box.TopLeft.X, box.TopLeft.Y, box.Width, box.Height);
+
+            // Set the pen for drawing
+            Pen pen = new(Color.Red, 2); // Red color with 2-pixel width
+
+            // Draw the bounding box
+            g.DrawRectangle(pen, boundingBox);
+        }
+
+        private void DrawOntology(Graphics g, BoundingBox box, List<OntologySeries> ontologySeries, List<VObjectSeries> vObjectSeries, int key)
+        {
+            string label = string.Empty;
+
+            foreach (var ontology in ontologySeries)
+            {
+                if (ontology.OntologyID == (ulong)key)
+                {
+                    label = string.Format("{0}: {1}", key, ontology.Label);
+                    break;
+                }
+            }
+
+            foreach (var vObject in vObjectSeries)
+            {
+                if (vObject.OntologyID == (ulong)key)
+                {
+                    label += string.Format("\t({0})", Math.Round(vObject.Confidence, 1));
+                    break;
+                }
+            }
+
+            g.DrawString(label, new Font("Arial", 10), new SolidBrush(Color.Red), box.TopLeft.X, box.TopLeft.Y - 20);
+        }
+
+        #endregion
         private void BitmapToImageSource(Bitmap frame)
         {
             BitmapImage bitmapImage = new();
