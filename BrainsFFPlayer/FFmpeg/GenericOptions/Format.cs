@@ -52,6 +52,9 @@ namespace BrainsFFPlayer.FFmpeg.GenericOptions
         [AVFormatOption("rtbufsize", "3041280", "max memory used for buffering real-time frames (from 0 to INT_MAX) (default 3041280)")]
         RTBUFSIZE,
 
+        [AVFormatOption("thread_queue_size", "0", "set the maximum number of queued packets from the demuxer (default 0)")]
+        THREAD_QUEUE_SIZE,
+
         // ---------------------------- RTP / RTSP ---------------------------- //
 
         [AVFormatOption("timeout", "1000000", "Set timeout for socket I/O operations expressed in seconds (fractional value can be set). Applicable only for HTTP output. (us)")]

@@ -77,8 +77,9 @@ namespace BrainsFFPlayer.FFmpeg.Core
 
                 pCodecContext = ffmpeg.avcodec_alloc_context3(codec);
 
-                ffmpeg.av_opt_set(pCodecContext->priv_data, "preset", "fast", 0);
-                ffmpeg.av_opt_set(pCodecContext->priv_data, "tune", "zerolatency", 0);
+                //실시간 영상 스트리밍시 아래 활성화시 재생 안됨 문제로 임시 비활성
+                //ffmpeg.av_opt_set(pCodecContext->priv_data, "preset", "fast", 0);
+                //ffmpeg.av_opt_set(pCodecContext->priv_data, "tune", "zerolatency", 0);
 
                 if (HWDeviceType != AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
                 {

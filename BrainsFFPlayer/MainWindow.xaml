@@ -123,7 +123,7 @@
                         VerticalAlignment="Center"
                         Width="100"
                         Height="50"
-                        IsEnabled="{Binding IsPlay, Converter={StaticResource InvertBooleanConverter}}"
+                        IsEnabled="{Binding IsPlay, Converter={x:Static materialDesign:BooleanToVisibilityConverter.NotCollapsedInstance}}"
                         Command="{Binding PlayVideo_Command}">
                         <StackPanel
                             Orientation="Horizontal">
@@ -222,7 +222,7 @@
             Width="300"
             Background="LightGray"
             Opacity="0.8"
-            Visibility="{Binding ElementName=InfoToggleButton, Path=IsChecked, Converter={StaticResource BooleanToVisibilityConverter}}">
+            Visibility="{Binding ElementName=InfoToggleButton, Path=IsChecked, Converter={x:Static materialDesign:BooleanToVisibilityConverter.CollapsedInstance}}">
             <StackPanel
                 Margin="10">
                 <Grid
@@ -577,8 +577,8 @@
             Margin="0,5,5,60"
             Background="LightGray"
             Opacity="0.8"
-            IsEnabled="{Binding IsPlay, Converter={StaticResource InvertBooleanConverter}}"
-            Visibility="{Binding ElementName=OptionToggleButton, Path=IsChecked, Converter={StaticResource BooleanToVisibilityConverter}}">
+            IsEnabled="{Binding IsPlay, Converter={x:Static materialDesign:BooleanToVisibilityConverter.NotCollapsedInstance}}"
+            Visibility="{Binding ElementName=OptionToggleButton, Path=IsChecked, Converter={x:Static materialDesign:BooleanToVisibilityConverter.CollapsedInstance}}">
             <StackPanel>
                 <TextBlock
                     Margin="20,10"
@@ -613,8 +613,5 @@
                 </StackPanel>
             </StackPanel>
         </Border>
-
     </Grid>
-
-
 </Window>
