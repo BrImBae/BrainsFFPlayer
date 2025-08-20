@@ -101,90 +101,163 @@ namespace BrainsFFPlayer.FFmpeg.Core
             }
         }
 
-        public bool TryDecodeNextFrame(out MisbMetadata vmti, out AVFrame frame)
-        {            
+        public DecodeStatus TryDecodeNextFrame(out MisbMetadata vmti, out AVFrame frame)
+        {
             vmti = new();
-            frame = *pFrame;
+            frame = default;
 
             ffmpeg.av_frame_unref(pFrame);
             ffmpeg.av_frame_unref(receivedFrame);
 
-            int error;
             AVRational time_base = pFormatContext->streams[videoIndex]->time_base;
+
+            // 하위(프레임 수신) 유예창: 디코더가 준비될 때까지 잠깐 기다림
+            var retryWindow = new Stopwatch();
+            retryWindow.Start();
+
+            TimeSpan maxRetryDuration = TimeSpan.FromSeconds(3);
+            const int TEMP_SLEEP_MS = 10;
 
             while (true)
             {
+                int error;
+
                 try
                 {
-                    // 새로운 패킷을 가져오기 위해 기존 패킷 해제
-                    ffmpeg.av_packet_unref(pPacket);
-
-                    //디버깅으로 장시간 디코딩 멈출 경우 -5 에러 발생 (I/O error)
-                    error = ffmpeg.av_read_frame(pFormatContext, pPacket);
-
-                    if (error == ffmpeg.AVERROR_EOF || error == -5)
+                    // ---------------------------
+                    // 1) 패킷 읽기 (read_frame loop)
+                    // ---------------------------
+                    while (true)
                     {
-                        return false;
-                    }
+                        ffmpeg.av_packet_unref(pPacket);
+                        error = ffmpeg.av_read_frame(pFormatContext, pPacket);
 
-                    if (dataIndex >= 0 && pFormatContext->streams[dataIndex]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_DATA)
-                    {
-                        if (MISB.IsMISBMetadata(pPacket->size, pPacket->data))
+                        if (error == ffmpeg.AVERROR_EOF)
                         {
-                            vmti = MISB.ProcessPacketMetadata(pPacket->size, pPacket->data);
+                            // 실제 입력 종료
+                            return DecodeStatus.StreamEnded;
                         }
+
+                        // 네트워크 지연/일시 오류: EAGAIN, I/O(-5) → 유예창 내 재시도
+                        if (error == ffmpeg.AVERROR(ffmpeg.EAGAIN) || error == -5)
+                        {
+                            if (retryWindow.Elapsed < maxRetryDuration)
+                            {
+                                Thread.Sleep(TEMP_SLEEP_MS);
+                                continue;
+                            }
+                            return DecodeStatus.TryAgain;
+                        }
+
+                        // 그 외 오류는 치명적 → 상위에서 종료하도록 StreamEnded 처리
+                        error.ThrowExceptionIfError();
+
+                        // ---- MISB(DATA) 처리: 예외 무해화 ----
+                        if (dataIndex >= 0 &&
+                            pPacket->stream_index == dataIndex &&
+                            pFormatContext->streams[dataIndex]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_DATA &&
+                            MISB.IsMISBMetadata(pPacket->size, pPacket->data))
+                        {
+                            try
+                            {
+                                vmti = MISB.ProcessPacketMetadata(pPacket->size, pPacket->data);
+                            }
+                            catch (Exception)
+                            {
+                                vmti = new MisbMetadata();
+                            }
+
+                            // 데이터 패킷이면 다음 패킷 계속
+                            continue;
+                        }
+
+                        // 비디오 패킷을 만날 때까지 계속 읽기
+                        if (pPacket->stream_index != videoIndex)
+                            continue;
+
+                        break; // 비디오 패킷 확보
                     }
 
-                    // 비디오 스트림 패킷인지 확인
-                    if (pPacket->stream_index != videoIndex)
-                        continue;
-
-                    // 패킷을 디코더에 전달
+                    // --------------------------------
+                    // 2) 디코더에 비디오 패킷 전송(send)
+                    // --------------------------------
                     error = ffmpeg.avcodec_send_packet(pCodecContext, pPacket);
 
                     if (error == ffmpeg.AVERROR(ffmpeg.EAGAIN))
                     {
-                        // 디코더가 꽉 차 있음 → 이전 프레임을 받아야 함
-                        continue;
+                        // 디코더 버퍼가 가득 찼음 → 유예창 내 재시도
+                        if (retryWindow.Elapsed < maxRetryDuration)
+                        {
+                            Thread.Sleep(TEMP_SLEEP_MS);
+                            continue;
+                        }
+
+                        return DecodeStatus.TryAgain;
                     }
-                    else if (error < 0)
+
+                    if (error == ffmpeg.AVERROR_EOF)
                     {
-                        return false;
+                        // 디코더가 flush/종료 상태. 실시간 환경에선 일시적일 수 있으므로 TryAgain으로 처리.
+                        return DecodeStatus.TryAgain;
                     }
+
+                    error.ThrowExceptionIfError();
+                }
+                catch (Exception ex)
+                {
+                    // read/send 중 치유 가능한 오류: 유예창을 상위에 넘겨 재시도
+                    Debug.WriteLine($"Error while reading/sending packet: {ex.Message}");
+                    return DecodeStatus.TryAgain;
                 }
                 finally
                 {
                     ffmpeg.av_packet_unref(pPacket);
                 }
 
-                // 패킷이 정상적으로 전달된 경우, 디코딩된 프레임을 가져옴
-                while (true)
+                // -------------------------------
+                // 3) 프레임 수신(receive_frame)
+                // -------------------------------
+                int rcv = ffmpeg.avcodec_receive_frame(pCodecContext, pFrame);
+
+                if (rcv == ffmpeg.AVERROR(ffmpeg.EAGAIN))
                 {
-                    error = ffmpeg.avcodec_receive_frame(pCodecContext, pFrame);
-
-                    if (error == ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                    if (retryWindow.Elapsed < maxRetryDuration)
                     {
-                        // 새로운 패킷을 보내야 함
-                        break;
+                        Thread.Sleep(TEMP_SLEEP_MS);
+                        continue;
                     }
-                    else if (error < 0 || error == ffmpeg.AVERROR_EOF)
-                    {
-                        return false;
-                    }
-
-                    // 하드웨어 디코딩이 활성화된 경우 데이터 변환
-                    if (pCodecContext->hw_device_ctx != null)
-                    {
-                        ffmpeg.av_hwframe_transfer_data(receivedFrame, pFrame, 0);
-                        frame = *receivedFrame;
-                    }
-
-                    frame.time_base = time_base;
-                    frame.duration = pFrame->duration;
-                    frame.pts = pFrame->pts;
-
-                    return true;
+                    return DecodeStatus.TryAgain;
                 }
+
+                if (rcv == ffmpeg.AVERROR_EOF)
+                {
+                    // 디코더가 더 이상 출력하지 않음 → 종료
+                    return DecodeStatus.StreamEnded;
+                }
+
+                rcv.ThrowExceptionIfError();
+
+                // -------------------------------
+                // 4) HW → SW 전송(필요 시)
+                // -------------------------------
+                if (pCodecContext->hw_device_ctx != null)
+                {
+                    if (ffmpeg.av_hwframe_transfer_data(receivedFrame, pFrame, 0) >= 0)
+                        frame = *receivedFrame;
+                    else
+                        frame = *pFrame; // Fallback (치명적 아님)
+                }
+                else
+                {
+                    frame = *pFrame;
+                }
+
+                // 타임스탬프 보정
+                frame.time_base = time_base;
+                frame.duration = pFrame->duration;
+                frame.pts = pFrame->pts;
+
+                return DecodeStatus.Success;
             }
         }
 

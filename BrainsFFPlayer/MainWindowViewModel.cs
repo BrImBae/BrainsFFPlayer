@@ -1,18 +1,21 @@
-﻿using BrainsCV.MotionImageryStandardsBoard;
+﻿using BrainsCV;
+using BrainsCV.MotionImageryStandardsBoard;
+
 using BrainsFFPlayer.FFmpeg;
 using BrainsFFPlayer.FFmpeg.GenericOptions;
+using BrainsFFPlayer.Utility;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FFmpeg.AutoGen;
-using System.Drawing;
-using System.Windows.Input;
-using System.Windows.Media.Imaging;
-using System.Drawing.Imaging;
-using System.IO;
-using System.Diagnostics;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
-using BrainsFFPlayer.Utility;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Windows.Input;
+using System.Windows.Media.Imaging;
+using FFmpegManager = BrainsFFPlayer.FFmpeg.FFmpegManager;
 using PixelFormat = System.Drawing.Imaging.PixelFormat;
 
 namespace BrainsFFPlayer
@@ -193,10 +196,12 @@ namespace BrainsFFPlayer
 
             if(isRecord)
             {
+                ffmpegManager.RecordVideo("test.mp4");                
                 RecordText = "녹화 중지";
             }
             else
             {
+                ffmpegManager.StopRecord();
                 RecordText = "녹화";
             }
         }
@@ -244,7 +249,7 @@ namespace BrainsFFPlayer
             TotalPlayTime = ConvertDuration(TotalDuration);
         }
 
-        private unsafe void VideoFrameReceived(AVFrame frame, MisbMetadata metadata)
+        private unsafe void VideoFrameReceived(VideoFrameWithMISB frame)
         {
             //첫 프레임 받을 때 시작 시간 설정 (for PTS 동기화)
             if (!stopwatch.IsRunning)
@@ -253,10 +258,10 @@ namespace BrainsFFPlayer
                 startTime = stopwatch.ElapsedMilliseconds;
             }
 
-            var convertedFrame = UpdateVideoFrameWithVMTI(frame, metadata);
+            var convertedFrame = UpdateVideoFrameWithVMTI(frame.VideoFrame, frame.MISB);
 
             BitmapToImageSource(convertedFrame);
-            SyncAVFrameTimeBase(frame);
+            SyncAVFrameTimeBase(frame.VideoFrame);
         }
 
         private unsafe Bitmap UpdateVideoFrameWithVMTI(AVFrame frame, MisbMetadata misb)
@@ -343,6 +348,7 @@ namespace BrainsFFPlayer
         }
 
         #endregion
+
         private void BitmapToImageSource(Bitmap frame)
         {
             BitmapImage bitmapImage = new();

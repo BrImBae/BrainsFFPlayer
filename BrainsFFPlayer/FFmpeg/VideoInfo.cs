@@ -3,6 +3,13 @@ using System.Drawing;
 
 namespace BrainsFFPlayer.FFmpeg
 {
+    public enum DecodeStatus
+    {
+        Success,
+        TryAgain,    // 일시적 오류: 상위 루프에서 유예창 내 반복 재시도
+        StreamEnded  // 실제 종료 또는 유예 초과
+    }
+
     public unsafe class VideoInfo
     {
         /// <summary>

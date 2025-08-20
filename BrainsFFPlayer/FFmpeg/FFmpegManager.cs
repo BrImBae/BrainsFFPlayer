@@ -1,4 +1,5 @@
-﻿using BrainsCV.MotionImageryStandardsBoard;
+﻿using BrainsCV;
+
 using BrainsFFPlayer.FFmpeg.Core;
 using BrainsFFPlayer.FFmpeg.GenericOptions;
 using FFmpeg.AutoGen;
@@ -29,7 +30,8 @@ namespace BrainsFFPlayer.FFmpeg
         private bool isDecodingThreadRunning;
 
         public event Action<VideoInfo> VideoInfoReceived = delegate { };
-        public event Action<AVFrame, MisbMetadata> VideoFrameReceived = delegate { };
+        public event Action<VideoFrameWithMISB> VideoFrameReceived = delegate { };
+        public event Action InvalidVideoExit = delegate { };
 
         public FFmpegManager()
         {
@@ -148,48 +150,95 @@ namespace BrainsFFPlayer.FFmpeg
 
         private void DecodeAllFramesToImages(object? state)
         {
+            // 임시 오류 유예창(상위): 네트워크 hiccup을 일정 시간 허용
+            var tempErrTimer = new Stopwatch();
+            bool tempErrActive = false;
+            // 환경에 맞게 조정 (무선/위성 등은 더 길게)
+            TimeSpan maxTempErrDuration = TimeSpan.FromSeconds(5);
+            const int TEMP_SLEEP_MS = 10;
+
             try
             {
-                bool hwDecoder = Convert.ToBoolean(state);
-                ConfigureHWDecoder(hwDecoder, out hwDeviceType);
+                ConfigureHWDecoder(false, out hwDeviceType);
 
-                using var decoder = new VideoStreamDecoder(url, avInputOption, avFormatOption,hwDeviceType);
+                using var decoder = new VideoStreamDecoder(url, avInputOption, avFormatOption, hwDeviceType);
+                videoInfo = decoder.GetVideoInfo();
+                VideoInfoReceived?.Invoke(videoInfo);
 
-                var info = decoder.GetContextInfo();
-                info.ToList().ForEach(x => Debug.WriteLine($"{x.Key} = {x.Value}"));
+                using var vfc = new VideoFrameConverter(
+                    decoder.FrameSize,
+                    hwDeviceType == AVHWDeviceType.AV_HWDEVICE_TYPE_NONE ? decoder.PixelFormat : GetHWPixelFormat(hwDeviceType),
+                    decoder.FrameSize,
+                    AVPixelFormat.AV_PIX_FMT_BGR24);
 
-                var sourceSize = decoder.FrameSize;
-                var sourcePixelFormat = hwDeviceType == AVHWDeviceType.AV_HWDEVICE_TYPE_NONE ? decoder.PixelFormat : GetHWPixelFormat(hwDeviceType);
-                var destinationSize = sourceSize;
-                var destinationPixelFormat = AVPixelFormat.AV_PIX_FMT_BGR24;
-
-                using var vfc = new VideoFrameConverter(sourceSize, sourcePixelFormat, destinationSize, destinationPixelFormat);
-
-                while (decoder.TryDecodeNextFrame(out var vmti, out var avFrame) && isDecodingEvent!.WaitOne())
+                while (isDecodingThreadRunning)
                 {
-                    videoInfo = decoder.GetVideoInfo();
-                    var convertedFrame = vfc.Convert(avFrame);
+                    var status = decoder.TryDecodeNextFrame(out var vmti, out var avFrame);                    
 
-                    if (isRecord)
+                    switch (status)
                     {
-                        decodedFrameQueue.Enqueue(convertedFrame);
-                    }
+                        case DecodeStatus.Success:
+                            {
+                                if (tempErrActive)
+                                {
+                                    tempErrActive = false; tempErrTimer.Reset();
+                                }
 
-                    VideoInfoReceived?.Invoke(videoInfo);
-                    VideoFrameReceived?.Invoke(convertedFrame, vmti);
+                                if (!isDecodingEvent!.WaitOne())
+                                {
+                                    break;
+                                }
+
+                                var converted = vfc.Convert(avFrame);
+
+                                if (isRecord)
+                                {
+                                    decodedFrameQueue.Enqueue(converted);
+                                }
+
+                                try
+                                {
+                                    VideoFrameReceived?.Invoke(new VideoFrameWithMISB { MISB = vmti, VideoFrame = converted });
+                                }
+                                catch (Exception) { }
+
+                                break;
+                            }
+
+                        case DecodeStatus.TryAgain:
+                            {
+                                if (!tempErrActive)
+                                {
+                                    tempErrActive = true;
+                                    tempErrTimer.Restart();
+                                }
+
+                                if (tempErrTimer.Elapsed < maxTempErrDuration)
+                                {
+                                    // 바쁜 루프 방지
+                                    Thread.Sleep(TEMP_SLEEP_MS);
+                                    continue;
+                                }
+
+                                InvalidVideoExit?.Invoke();
+                                isDecodingThreadRunning = false;
+                                break;
+                            }
+
+                        case DecodeStatus.StreamEnded:
+                        default:
+                            {
+                                InvalidVideoExit?.Invoke();
+                                isDecodingThreadRunning = false;
+                                break;
+                            }
+                    }
                 }
             }
-            catch (ApplicationException e)
+            catch (Exception ex)
             {
-                Debug.WriteLine(e.Message);
-            }
-            catch (ObjectDisposedException e)
-            {
-                Debug.WriteLine(e.Message);
-            }
-            catch (AccessViolationException e)
-            {
-                Debug.WriteLine(e.Message);
+                Debug.WriteLine(ex.Message);
+                InvalidVideoExit?.Invoke();
             }
         }
 
@@ -207,7 +256,7 @@ namespace BrainsFFPlayer.FFmpeg
                         using var vfc = new VideoFrameConverter(videoInfo.FrameSize, sourcePixelFormat, videoInfo.FrameSize, destinationPixelFormat);
                         var convertedFrame = vfc.Convert(queueFrame);
 
-                        h264Encoder?.TryEncodeNextPacket(convertedFrame, videoInfo);
+                        h264Encoder?.TryEncodeNextPacket(convertedFrame);
                     }
                 }
             }
